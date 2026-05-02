@@ -1,120 +1,142 @@
-from string import ascii_lowercase, whitespace
+from string import ascii_lowercase, whitespace, digits
 import json
+
+ALLOWED_ALPHABET = ascii_lowercase + ',.'
+
+# For learning replace everyting with '.'
+PUNC_SUBSTITUTIONS = {
+    '?': ',.,',
+    '!': ',.',
+    ':': '..',
+    ';': '.,',
+    '-': ',',
+    ',': ',',
+}
+LETTER_SUBSTITUTION = {
+        'á': 'a',
+        'č': 'c',
+        'ď': 'd',
+        'é': 'e',
+        'ě': 'e',
+        'ň': 'n',
+        'ř': 'r',
+        'š': 's',
+        'ť': 't',
+        'ú': 'u',
+        'ů': 'u',
+        'ý': 'y',
+        'ž': 'z',
+
+}
 
 
 def main():
     import sys
+    print(sys.argv)
 
     if len(sys.argv) < 2:
         print('Enter file as argument')
-        raise
+        raise ValueError
     elif len(sys.argv) < 3:
         reverse = False
     elif sys.argv[2].lower() == "true":
         reverse = True
 
-    wanted_bigrams = list(set('HasturKingInYellow'.lower()))
-    for a in ascii_lowercase:
-        for b in ascii_lowercase:
-            if a == b:
-                continue
-            bigram = a+b
-            if bigram in wanted_bigrams \
-                    or similar_exists(bigram, wanted_bigrams):
-                continue
-            wanted_bigrams.append(bigram)
+    filename = sys.argv[1]
 
-    freqs = find_ngrams(sys.argv[1], wanted_bigrams, reverse_text=reverse)
+    lines = []
+    with open(filename) as file:
+        lines = file.readlines()
 
-    ngram2grid = {}
-    a = 0
-    while freqs:
-        try:
-            for x in range(a+1):
-                ngram, _ = freqs.pop(0)
-                ngram2grid[ngram] = (x, a)
-            for y in range(a):
-                ngram, _ = freqs.pop(0)
-                ngram2grid[ngram] = (a, y)
-            a += 1
-        except IndexError:
-            break
+    conjoined = ' '.join(lines)
+    conjoined = conjoined.replace('\n', '')
+    conjoined = normalize_text(conjoined)
 
-    ngram2grid_json = json.dumps(ngram2grid, sort_keys=False, indent=4)
-    print(ngram2grid_json)
+    normalized_lines = [line.strip()
+                        for line in conjoined.split('.')
+                        if len(line.strip()) > 0]
+    # print(normalized_lines)
 
+    ngrams = {}
+    for idx, line in enumerate(normalized_lines):
+        ng = find_ngrams(line)
 
-def first_letter_contained(text: str, arr: list[str]) -> bool:
-    if not arr or not text:
-        return False
-    for a in arr:
-        if text.startswith(a[0]):
-            return True
-    return False
+        for ngram, count in ng.items():
+            val = ngrams.get(ngram, 0)
+            ngrams[ngram] = val + 1
 
+        # if idx > 10:
+        #     break
+        pass
 
-def similar_exists(text: str, arr: list[str]) -> bool:
-    if not arr or not text:
-        return False
-    if text in arr:
-        return True
-    for a in arr:
-        if text.startswith(a):
-            return True
-    return False
+    sorted_ngrams = sorted(
+        ngrams.items(),
+        key=lambda item: item[1]**len(item[0]),
+        reverse=True
+    )
+
+    print(*sorted_ngrams, sep='\n', end='\n\n\n')
+
+    marked_letters = []
+    for key, _ in sorted_ngrams:
+        for char in key:
+            if char in marked_letters:
+                break
+        else:
+            # the loop not encountered break
+            print(key)
+            marked_letters += key
+
+            if len(marked_letters) >= 26:
+                break
+    marked_letters = sorted(marked_letters)
+    print("MARKED:", marked_letters)
+
+    return reverse
 
 
 def normalize_text(text: str) -> str:
     text = text.strip().lower()
+    text = text.lstrip()
+
+    for key, val in LETTER_SUBSTITUTION.items():
+        if key not in text:
+            continue
+        text = text.replace(key, val)
+    for key in PUNC_SUBSTITUTIONS.keys():
+        if key not in text:
+            continue
+        text = text.replace(key, '.')
     normalized = ""
 
     for a in text:
-        if a in ascii_lowercase:
+        if a in ALLOWED_ALPHABET:
             normalized += a
         elif a in whitespace:
             normalized += ' '
     return normalized
 
 
-def find_ngrams(filename: str, keys: list[str], reverse_text: bool = False):
-    try:
-        with open(filename) as file:
-            lines = file.readlines()
-    except FileNotFoundError:
-        print('File does not exist.')
-        return
-
-    ngrams = {k: 0 for k in keys}
+def find_ngrams(line: str):
+    ngrams = {}
 
     def add_ngram(ngram: str):
+        ngram = ngram.strip()
+        if not ngram:
+            return
+
         val = ngrams.get(ngram, 0)
         ngrams[ngram] = val + 1
 
-    for line in lines:
-        line = normalize_text(line)
-        if reverse_text:
-            line = line[::-1]
+    line = line.replace(' ', '')
+    line = line + '  '
 
-        words = line.split(' ')
+    for x, y, z in zip(line, line[1:], line[2:]):
+        add_ngram(x)
+        add_ngram(x+y)
+        # add_ngram(x+y+z)
 
-        for w in words:
-            if not w:
-                continue
-            for double in zip(w, w[1:]):
-                bigram = ''.join(double)
-                if bigram not in keys:
-                    continue
-                add_ngram(bigram)
-            if w[-1] in keys:
-                add_ngram(w[-1])
-
-    sorted_ngrams = sorted(
-        ngrams.items(),
-        key=lambda item: item[1] if len(item[0]) > 1 else item[1] / 10,
-        reverse=True
-    )
-
-    return sorted_ngrams
+    return ngrams
 
 
 if __name__ == "__main__":
